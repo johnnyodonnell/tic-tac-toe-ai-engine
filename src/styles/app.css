@@ -1,0 +1,110 @@
+:root {
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --line: #d4d4d8;
+  --text: #18181b;
+  --muted: #71717a;
+  --x: #2563eb;
+  --o: #dc2626;
+  --win: #bbf7d0;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 2rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.status {
+  font-size: 1.1rem;
+  color: var(--muted);
+  min-height: 1.5rem;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 96px);
+  grid-template-rows: repeat(3, 96px);
+  gap: 8px;
+  padding: 8px;
+  background: var(--line);
+  border-radius: 12px;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.75rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.cell:not(:disabled):hover {
+  background: #e4e4e7;
+}
+
+.cell:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.cell:disabled {
+  cursor: default;
+}
+
+.cell--x {
+  color: var(--x);
+}
+
+.cell--o {
+  color: var(--o);
+}
+
+.cell--win,
+.cell--win:hover {
+  background: var(--win);
+}
+
+.new-game {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.6rem 1.5rem;
+  color: #ffffff;
+  background: var(--text);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.new-game:hover {
+  opacity: 0.85;
+}
