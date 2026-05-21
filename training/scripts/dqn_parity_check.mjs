@@ -1,6 +1,6 @@
-// Parity check (JS side) for the DQN bot: run the fixed boards from
-// dqn_parity_check.py through the JS engine and compare against
-// dqn_parity_expected.json.
+// Parity check (JS side) for the DQN difficulty models: run the fixed boards
+// from dqn_parity_check.py through the JS engine and compare against
+// dqn_parity_expected.json, for every difficulty.
 //
 // Confirms src/engine/dqnNet.js reproduces training/dqn/qnetwork.py. A real bug
 // shows up as a Q-value difference of ~0.01 or more; cross-language float noise
@@ -18,9 +18,6 @@ import { qForward } from '../../src/engine/dqnNet.js'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '..', '..')
 
-const weights = JSON.parse(
-  fs.readFileSync(path.join(repoRoot, 'src/engine/dqnWeights.json'), 'utf8'),
-)
 const expected = JSON.parse(
   fs.readFileSync(path.join(here, '..', 'dqn_parity_expected.json'), 'utf8'),
 )
@@ -35,33 +32,42 @@ function maxAbsDiff(a, b) {
   return m
 }
 
+function weightsFor(difficulty) {
+  const name = `dqnWeights${difficulty[0].toUpperCase()}${difficulty.slice(1)}.json`
+  return JSON.parse(fs.readFileSync(path.join(repoRoot, 'src/engine', name), 'utf8'))
+}
+
 let failures = 0
 
-for (const c of expected.cases) {
-  const q = qForward(weights, encode(c.state))
-  const qDiff = maxAbsDiff(q, c.qValues)
+for (const [difficulty, cases] of Object.entries(expected.models)) {
+  const weights = weightsFor(difficulty)
+  for (const c of cases) {
+    const q = qForward(weights, encode(c.state))
+    const qDiff = maxAbsDiff(q, c.qValues)
 
-  const legal = []
-  for (let i = 0; i < 9; i++) {
-    if (c.state[i] === 0) legal.push(i)
-  }
-  let best = legal[0]
-  for (const a of legal) {
-    if (q[a] > q[best]) best = a
-  }
-  const moveMatch = best === c.bestMove
-  const ok = qDiff < TOL && moveMatch
-  if (!ok) failures++
+    const legal = []
+    for (let i = 0; i < 9; i++) {
+      if (c.state[i] === 0) legal.push(i)
+    }
+    let best = legal[0]
+    for (const a of legal) {
+      if (q[a] > q[best]) best = a
+    }
+    const moveMatch = best === c.bestMove
+    const ok = qDiff < TOL && moveMatch
+    if (!ok) failures++
 
-  console.log(
-    `${ok ? 'OK  ' : 'FAIL'}  state ${JSON.stringify(c.state)}  ` +
-    `Δq=${qDiff.toExponential(1)}  move ${best}${moveMatch ? ' == ' : ' != '}${c.bestMove}`,
-  )
+    console.log(
+      `${ok ? 'OK  ' : 'FAIL'}  [${difficulty.padEnd(6)}] state ` +
+      `${JSON.stringify(c.state)}  Δq=${qDiff.toExponential(1)}  ` +
+      `move ${best}${moveMatch ? ' == ' : ' != '}${c.bestMove}`,
+    )
+  }
 }
 
 console.log(
   failures === 0
-    ? '\nPARITY OK — the JS DQN engine matches the Python reference.'
+    ? '\nPARITY OK — the JS DQN engine matches the Python reference for all models.'
     : `\nPARITY FAILED — ${failures} case(s) mismatched.`,
 )
 process.exit(failures === 0 ? 0 : 1)

@@ -1,10 +1,10 @@
-"""Parity check (Python side) for the DQN bot.
+"""Parity check (Python side) for the DQN difficulty models.
 
-Dumps the Q-network's outputs for a set of fixed boards — the Q-values and the
-greedy move — as dqn_parity_expected.json. dqn_parity_check.mjs then runs the JS
-engine on the same boards and compares.
+For every difficulty checkpoint, dumps the Q-network's outputs on a set of fixed
+boards — the Q-values and the greedy move — as dqn_parity_expected.json.
+dqn_parity_check.mjs then runs the JS engine on the same boards and compares.
 
-The network is run in float64 (`.double()`) to match the JS engine's float64
+Each network is run in float64 (`.double()`) to match the JS engine's float64
 arithmetic, so any large mismatch points to a real implementation bug.
 
 Run:  python training/scripts/dqn_parity_check.py
@@ -19,10 +19,11 @@ sys.path.insert(0, TRAINING_DIR)
 
 import torch
 
+from dqn import config
 from dqn.qnetwork import QNetwork, q_values
 from games.tictactoe import TicTacToe
 
-CHECKPOINT = os.path.join(TRAINING_DIR, "dqn", "checkpoints", "best.pt")
+CHECKPOINT_DIR = os.path.join(TRAINING_DIR, "dqn", "checkpoints")
 OUT_PATH = os.path.join(TRAINING_DIR, "dqn_parity_expected.json")
 
 # Fixed canonical states spanning empty, early, mid, near-terminal and tactical
@@ -40,13 +41,8 @@ FIXED_STATES = [
 ]
 
 
-def main():
-    game = TicTacToe()
-    net = QNetwork(game.input_size, game.action_size)
-    net.load_state_dict(torch.load(CHECKPOINT, map_location="cpu"))
-    net.double()        # float64, to match the JS engine
-    net.eval()
-
+def cases_for(game, net):
+    """Q-values and greedy move for each fixed board, under `net`."""
     cases = []
     for state in FIXED_STATES:
         s = tuple(state)
@@ -57,10 +53,23 @@ def main():
             if qs[a] > qs[best]:
                 best = a
         cases.append({"state": list(state), "qValues": qs, "bestMove": best})
+    return cases
+
+
+def main():
+    game = TicTacToe()
+    models = {}
+    for difficulty in config.DIFFICULTY_TARGETS:
+        net = QNetwork(game.input_size, game.action_size)
+        checkpoint = os.path.join(CHECKPOINT_DIR, f"{difficulty}.pt")
+        net.load_state_dict(torch.load(checkpoint, map_location="cpu"))
+        net.double()        # float64, to match the JS engine
+        net.eval()
+        models[difficulty] = cases_for(game, net)
 
     with open(OUT_PATH, "w") as f:
-        json.dump({"cases": cases}, f, indent=2)
-    print(f"wrote {len(cases)} reference cases -> {OUT_PATH}")
+        json.dump({"models": models}, f, indent=2)
+    print(f"wrote reference cases for {list(models)} -> {OUT_PATH}")
 
 
 if __name__ == "__main__":

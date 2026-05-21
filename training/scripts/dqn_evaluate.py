@@ -1,10 +1,10 @@
-"""Evaluate the trained DQN bot against perfect minimax.
+"""Evaluate the trained DQN difficulty models against minimax and random play.
 
-Two checks:
-  1. Head-to-head — the DQN bot vs minimax, moving first and second.
-  2. Exhaustive optimality — for every reachable position, verify the bot's
-     greedy move never worsens the game-theoretic value. Zero "losing blunders"
-     means the bot can never be beaten.
+For each difficulty (easy / medium / hard) it reports:
+  - exhaustive optimality — losing blunders across every reachable position;
+  - full-game outcomes vs perfect minimax (which varies among optimal moves so
+    games differ);
+  - full-game outcomes vs a random opponent.
 
 The DQN bot picks moves with a single forward pass — argmax Q over legal
 actions, no search.
@@ -13,6 +13,7 @@ Run:  python training/scripts/dqn_evaluate.py
 """
 
 import os
+import random
 import sys
 
 TRAINING_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,11 +21,13 @@ sys.path.insert(0, TRAINING_DIR)
 
 import torch
 
+from dqn import config
 from dqn.qnetwork import QNetwork, q_values
 from games import minimax_ref
 from games.tictactoe import TicTacToe
 
-CHECKPOINT = os.path.join(TRAINING_DIR, "dqn", "checkpoints", "best.pt")
+CHECKPOINT_DIR = os.path.join(TRAINING_DIR, "dqn", "checkpoints")
+MATCH_GAMES = 400
 
 
 def all_states(game):
@@ -52,35 +55,13 @@ def net_move(game, net, state):
     return best_a
 
 
-def head_to_head(game, net):
-    """Play the DQN bot vs minimax, bot moving first then second."""
-    results = []
-    for net_first in (True, False):
-        state = game.initial_state()
-        net_to_move = net_first
-        while not game.is_terminal(state):
-            if net_to_move:
-                action = net_move(game, net, state)
-            else:
-                action = minimax_ref.best_action(game, state)
-            state = game.apply_action(state, action)
-            net_to_move = not net_to_move
-        value = game.outcome(state)
-        net_value = value if net_to_move else -value
-        outcome = "draw" if net_value == 0 else ("WIN" if net_value > 0 else "LOSS")
-        results.append(("net first" if net_first else "net second", outcome))
-    return results
-
-
 def optimality(game, net):
-    """Check the bot's move at every decision position against minimax.
+    """Returns (positions checked, suboptimal moves, losing blunders).
 
-    Returns (positions checked, suboptimal moves, losing blunders). A losing
-    blunder turns a non-losing position into a losing one.
+    A losing blunder turns a non-losing position into a losing one.
     """
     states = sorted(s for s in all_states(game) if not game.is_terminal(s))
-    suboptimal = 0
-    losing_blunders = 0
+    suboptimal = losing_blunders = 0
     for state in states:
         v_before = minimax_ref._value(game, state)
         action = net_move(game, net, state)
@@ -92,25 +73,72 @@ def optimality(game, net):
     return len(states), suboptimal, losing_blunders
 
 
+def optimal_move(game, state, rng):
+    """A randomly chosen optimal move — perfect play that varies game to game."""
+    position_value = minimax_ref._value(game, state)
+    best = [
+        a for a in game.legal_actions(state)
+        if -minimax_ref._value(game, game.apply_action(state, a)) == position_value
+    ]
+    return rng.choice(best)
+
+
+def random_move(game, state, rng):
+    """A uniformly random legal move."""
+    return rng.choice(game.legal_actions(state))
+
+
+def play_match(game, net, opponent_move, net_first):
+    """Play one game; return the net's result: +1 win, 0 draw, -1 loss."""
+    state = game.initial_state()
+    net_to_move = net_first
+    while not game.is_terminal(state):
+        if net_to_move:
+            action = net_move(game, net, state)
+        else:
+            action = opponent_move(game, state)
+        state = game.apply_action(state, action)
+        net_to_move = not net_to_move
+    value = game.outcome(state)
+    return value if net_to_move else -value
+
+
+def measure(game, net, opponent_move, games):
+    """Play `games` games, alternating who moves first; return (wins, draws, losses)."""
+    wins = draws = losses = 0
+    for i in range(games):
+        result = play_match(game, net, opponent_move, net_first=(i % 2 == 0))
+        if result > 0:
+            wins += 1
+        elif result < 0:
+            losses += 1
+        else:
+            draws += 1
+    return wins, draws, losses
+
+
 def main():
     game = TicTacToe()
-    net = QNetwork(game.input_size, game.action_size)
-    net.load_state_dict(torch.load(CHECKPOINT, map_location="cpu"))
-    net.eval()
+    rng = random.Random(config.SEED)
 
-    print("head-to-head vs perfect minimax:")
-    for label, outcome in head_to_head(game, net):
-        print(f"  {label:11s}: {outcome}")
+    for difficulty in config.DIFFICULTY_TARGETS:
+        checkpoint = os.path.join(CHECKPOINT_DIR, f"{difficulty}.pt")
+        net = QNetwork(game.input_size, game.action_size)
+        net.load_state_dict(torch.load(checkpoint, map_location="cpu"))
+        net.eval()
 
-    print("exhaustive optimality check:")
-    total, suboptimal, blunders = optimality(game, net)
-    print(f"  decision positions checked : {total}")
-    print(f"  suboptimal moves           : {suboptimal}")
-    print(f"  losing blunders            : {blunders}")
-    if blunders == 0:
-        print("  => the bot can never be beaten (no losing blunders).")
-    else:
-        print("  => the bot has positions where it can be beaten.")
+        total, suboptimal, blunders = optimality(game, net)
+        vs_perfect = measure(game, net, lambda g, s: optimal_move(g, s, rng), MATCH_GAMES)
+        vs_random = measure(game, net, lambda g, s: random_move(g, s, rng), MATCH_GAMES)
+
+        print(f"[{difficulty.upper()}]  {os.path.basename(checkpoint)}")
+        print(f"  optimality      : {blunders} losing blunders, "
+              f"{suboptimal} suboptimal  (of {total} positions)")
+        w, d, l = vs_perfect
+        print(f"  vs perfect play : {w} win / {d} draw / {l} loss  (of {MATCH_GAMES})")
+        w, d, l = vs_random
+        print(f"  vs random play  : {w} win / {d} draw / {l} loss  (of {MATCH_GAMES})")
+        print()
 
 
 if __name__ == "__main__":

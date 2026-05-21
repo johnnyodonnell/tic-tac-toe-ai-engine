@@ -5,8 +5,10 @@ Run from anywhere:
 Optional smoke-test overrides:
     python training/scripts/dqn_train.py --iterations 3 --games-per-iter 20
 
-The best network (fewest losing blunders vs minimax) is checkpointed to
-training/dqn/checkpoints/best.pt; export it with scripts/dqn_export.py.
+One run snapshots three checkpoints — easy.pt, medium.pt, hard.pt — into
+training/dqn/checkpoints/. For each difficulty, the checkpoint kept is the one
+whose losing-blunder count is closest to that difficulty's target (see
+dqn/config.py DIFFICULTY_TARGETS). Export them with scripts/dqn_export.py.
 """
 
 import argparse
@@ -98,11 +100,14 @@ def main():
     decision_states = all_decision_states(game)
 
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
-    best_path = os.path.join(CHECKPOINT_DIR, "best.pt")
-    best_blunders = None
+    targets = config.DIFFICULTY_TARGETS
+    # For each difficulty, track the checkpoint whose blunder count is closest
+    # to its target: snapshots[d] = (best_distance, blunders_when_saved).
+    snapshots = {d: None for d in targets}
 
     print(f"training: {args.iterations} iterations x {args.games_per_iter} games "
           f"({len(decision_states)} decision states)")
+    print(f"difficulty targets (losing blunders): {targets}")
     for iteration in range(1, args.iterations + 1):
         epsilon = epsilon_for(iteration)
 
@@ -126,18 +131,25 @@ def main():
         if iteration % config.TARGET_SYNC_EVERY == 0:
             target_qnet.load_state_dict(qnet.state_dict())
 
-        # 4. Exhaustive evaluation; checkpoint the best net seen.
+        # 4. Exhaustive evaluation; snapshot the closest net for each difficulty.
         blunders = count_losing_blunders(game, qnet, decision_states)
-        if best_blunders is None or blunders <= best_blunders:
-            best_blunders = blunders
-            torch.save(qnet.state_dict(), best_path)
-            marker = "  <- best"
-        else:
-            marker = ""
+        saved = []
+        for difficulty, target in targets.items():
+            distance = abs(blunders - target)
+            if snapshots[difficulty] is None or distance < snapshots[difficulty][0]:
+                snapshots[difficulty] = (distance, blunders)
+                torch.save(qnet.state_dict(),
+                           os.path.join(CHECKPOINT_DIR, f"{difficulty}.pt"))
+                saved.append(difficulty)
+        marker = ("  <- " + ", ".join(saved)) if saved else ""
         print(f"iter {iteration:2d}  eps={epsilon:.2f}  loss={last_loss:.4f}  "
               f"losing-blunders={blunders}{marker}")
 
-    print(f"done - best net ({best_blunders} losing blunders) saved to {best_path}")
+    print("done - difficulty snapshots:")
+    for difficulty, target in targets.items():
+        _, blunders_at = snapshots[difficulty]
+        print(f"  {difficulty:7s} (target {target:4d})  "
+              f"saved at {blunders_at} losing blunders  -> {difficulty}.pt")
 
 
 if __name__ == "__main__":

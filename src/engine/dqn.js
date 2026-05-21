@@ -1,18 +1,28 @@
-// Model-free DQN tic-tac-toe bot. Exports bestMove(board) — a drop-in
-// replacement for the minimax engine: identical signature and return contract
-// (a cell index, or null when the board is full).
+// Model-free DQN tic-tac-toe bot. Exports bestMove(board, difficulty).
 //
-// Unlike the AlphaZero bot, this does NO search. One forward pass through the
-// Q-network scores every move, and the best legal move is played. Weights come
-// from dqnWeights.json, produced offline by training/scripts/dqn_export.py.
+// Three separately trained models back the three difficulties — each a snapshot
+// from a different point in self-play training. Hard is the unbeatable
+// 0-blunder net; Medium and Easy are weaker (earlier) snapshots that make
+// systematic mistakes. All play deterministically: one forward pass through the
+// Q-network, argmax over legal moves, no search.
 //
-// Built for completeness and comparison; the app's UI uses neural.js. To try
-// this bot instead, swap the import in App.jsx.
+// Weights are produced offline by training/scripts/dqn_export.py.
 
-import dqnWeights from './dqnWeights.json'
+import dqnWeightsEasy from './dqnWeightsEasy.json'
+import dqnWeightsMedium from './dqnWeightsMedium.json'
+import dqnWeightsHard from './dqnWeightsHard.json'
 import { HUMAN, BOT, availableMoves } from './game.js'
 import { encode } from './nnGame.js'
 import { qForward } from './dqnNet.js'
+
+// The selectable difficulty levels, weakest to strongest.
+export const DIFFICULTIES = ['easy', 'medium', 'hard']
+
+const WEIGHTS = {
+  easy: dqnWeightsEasy,
+  medium: dqnWeightsMedium,
+  hard: dqnWeightsHard,
+}
 
 // Convert the app board ('X' | 'O' | null) to a canonical state: +1 for the
 // player to move, -1 for the opponent, 0 empty. 'X' moves first.
@@ -30,13 +40,15 @@ function toCanonical(board) {
   })
 }
 
-// Return the bot's move for `board`: the legal cell with the highest Q-value,
-// or null if the board is full. Drop-in replacement for bestMove() in minimax.js.
-export function bestMove(board) {
+// Return the bot's move for `board` at the given difficulty: the legal cell
+// with the highest Q-value, or null if the board is full. `difficulty`
+// defaults to 'hard', keeping bestMove(board) a drop-in for the minimax engine.
+export function bestMove(board, difficulty = 'hard') {
   const moves = availableMoves(board)
   if (moves.length === 0) return null
 
-  const q = qForward(dqnWeights, encode(toCanonical(board)))
+  const weights = WEIGHTS[difficulty] ?? WEIGHTS.hard
+  const q = qForward(weights, encode(toCanonical(board)))
   let best = moves[0]
   for (const move of moves) {
     if (q[move] > q[best]) best = move

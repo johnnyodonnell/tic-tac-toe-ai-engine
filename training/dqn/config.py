@@ -38,3 +38,11 @@ GAMES_PER_ITER = 200      # self-play games are cheap — no search
 # walk from the empty board) so off-principal positions also get trained.
 RANDOM_START_FRACTION = 0.6
 RANDOM_START_MAX_PLIES = 6
+
+# -- Difficulty snapshots --------------------------------------------------
+# One training run saves a checkpoint per entry — for each, the snapshot whose
+# losing-blunder count (out of ~4520 decision positions) is closest to its
+# target. 'hard' (target 0) is the unbeatable net; higher targets are weaker
+# (earlier) snapshots. The targets below were chosen from a sweep measuring
+# full-game strength: easy loses ~99% to perfect play, medium ~43%, hard 0%.
+DIFFICULTY_TARGETS = {"easy": 700, "medium": 185, "hard": 0}

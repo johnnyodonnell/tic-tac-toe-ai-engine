@@ -67,11 +67,19 @@ through self-play.
 The contrast with AlphaZero is the point: DQN does **no search at all**. Picking
 a move is a single forward pass — board in, nine Q-values out, play the best
 legal one. There is no tree, no lookahead; all of the skill lives in the network
-weights themselves. It reaches the same unbeatable standard as AlphaZero without
-ever simulating a future move.
+weights themselves. At full strength it reaches the same unbeatable standard as
+AlphaZero without ever simulating a future move.
+
+**Difficulty levels.** The app's selector — Easy / Medium / Hard — chooses
+between *three separately trained models*, each a snapshot from a different
+point in self-play training. Hard is the unbeatable net; Medium and Easy are
+weaker earlier snapshots that make systematic mistakes. All three are still
+deterministic single-forward-pass players — only the network differs. Roughly:
+Easy loses almost every game to good play, Medium is a fair fight, Hard cannot
+be beaten.
 
 Supporting files: `dqnNet.js` (the forward pass), `nnGame.js` (board encoding),
-and `dqnWeights.json` (the trained weights).
+and `dqnWeights{Easy,Medium,Hard}.json` (the three trained models).
 
 > **Model-based vs. model-free** — AlphaZero *uses the rules to plan ahead*
 > (model-based); DQN never simulates the future, it just reacts (model-free).
@@ -92,12 +100,12 @@ import { bestMove } from './engine/dqn.js'      // DQN        (current)
 ```
 src/
   App.jsx              the game UI and turn logic
-  components/          Board, Cell, Status
+  components/          Board, Cell, Status, DifficultySelector
   engine/
     game.js            shared rules (win lines, legal moves, ...)
     minimax.js         engine 1 — minimax
     neural.js  nn.js  mcts.js  nnGame.js  weights.json      engine 2 — AlphaZero
-    dqn.js  dqnNet.js  nnGame.js  dqnWeights.json           engine 3 — DQN
+    dqn.js  dqnNet.js  nnGame.js  dqnWeights{Easy,Medium,Hard}.json   engine 3 — DQN
 training/              offline Python pipelines that trained the neural engines
 ```
 

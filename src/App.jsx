@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Board from './components/Board.jsx'
 import Status from './components/Status.jsx'
+import DifficultySelector from './components/DifficultySelector.jsx'
 import { bestMove } from './engine/dqn.js'
 import {
   BOT,
@@ -21,6 +22,7 @@ function statusMessage(board) {
 
 export default function App() {
   const [board, setBoard] = useState(createBoard)
+  const [difficulty, setDifficulty] = useState('medium')
 
   function handleCellClick(index) {
     if (board[index] !== null || isGameOver(board)) return
@@ -36,7 +38,7 @@ export default function App() {
     }
 
     const afterBot = [...afterHuman]
-    afterBot[bestMove(afterHuman)] = BOT
+    afterBot[bestMove(afterHuman, difficulty)] = BOT
     setBoard(afterBot)
   }
 
@@ -57,6 +59,7 @@ export default function App() {
       <button className="new-game" onClick={newGame}>
         New Game
       </button>
+      <DifficultySelector difficulty={difficulty} onChange={setDifficulty} />
     </main>
   )
 }
