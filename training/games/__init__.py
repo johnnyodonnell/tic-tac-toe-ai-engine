@@ -1,1 +1,1 @@
-"""Concrete game plugins implementing `alphazero.game_interface.Game`."""
+"""Concrete game plugins implementing `game_interface.Game`."""

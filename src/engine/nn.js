@@ -7,8 +7,9 @@
 // loads in any environment — the browser app and the Node parity check alike.
 
 // Linear layer: `w` is row-major [out][in], `b` is [out]. Returns a length-out
-// array. The loop order matches export_weights.py's serialization.
-function linear(input, w, b) {
+// array. The loop order matches export_weights.py's serialization. Exported so
+// the DQN engine (dqnNet.js) can reuse it.
+export function linear(input, w, b) {
   const out = new Array(w.length)
   for (let o = 0; o < w.length; o++) {
     const row = w[o]

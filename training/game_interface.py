@@ -1,8 +1,8 @@
-"""The game-agnostic contract the AlphaZero core depends on.
+"""The game-agnostic contract the training pipelines depend on.
 
-The core modules (network, mcts, selfplay, train, arena) import only this
-interface — never a concrete game. A new game is added by subclassing `Game`;
-nothing else changes. tic-tac-toe (games/tictactoe.py) is the first plugin.
+Both the AlphaZero and DQN cores talk only to this interface — never a concrete
+game. A new game is added by subclassing `Game`; nothing else changes.
+tic-tac-toe (games/tictactoe.py) is the first plugin.
 
 State convention
 ----------------

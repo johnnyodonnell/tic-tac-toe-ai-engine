@@ -1,11 +1,16 @@
-# Training — AlphaZero tic-tac-toe bot
+# Training — neural tic-tac-toe bots
 
-This folder trains the neural network behind the app's bot. It learns entirely
-by **self-play** — no minimax teacher, no human games — using an AlphaZero-style
-loop: a policy/value network guided by MCTS, improved by playing itself.
+This folder trains the project's neural bots. Both learn tic-tac-toe entirely by
+**self-play** — no minimax teacher, no human games — but with two different
+reinforcement-learning methods:
 
-The trained weights are exported to `../src/engine/weights.json`, which the app
-loads. Training is a manual offline step; it is **not** part of `npm run build`.
+- **AlphaZero** (`alphazero/`) — a policy/value network guided by Monte Carlo
+  Tree Search. It *searches* at play time.
+- **DQN** (`dqn/`) — a model-free Q-network. It does **no search**: one forward
+  pass scores every move and the best is played.
+
+Each pipeline exports weights into `../src/engine/`, which the browser engines
+load. Training is a manual offline step — it is **not** part of `npm run build`.
 
 ## Setup
 
@@ -19,62 +24,74 @@ pip install -r requirements.txt
 ```
 
 `requirements.txt` pins the CPU build of PyTorch — tic-tac-toe trains on a CPU
-in a couple of minutes.
+in a few minutes.
 
 ## Workflow
 
 All commands assume the venv is active and are run from `training/`.
 
+**AlphaZero bot:**
 ```sh
 python scripts/run_training.py        # self-play -> train -> arena gate, looped
 python scripts/export_weights.py      # best checkpoint -> ../src/engine/weights.json
 python scripts/evaluate_minimax.py    # check the bot against perfect minimax
-python scripts/parity_check.py        # dump JS reference outputs (parity_expected.json)
-node   scripts/parity_check.mjs       # confirm the JS engine matches Python
+python scripts/parity_check.py && node scripts/parity_check.mjs   # JS == Python
 ```
 
-`run_training.py` accepts `--iterations` and `--games-per-iter` for quick smoke
-tests, e.g. `python scripts/run_training.py --iterations 3 --games-per-iter 15`.
+**DQN bot:**
+```sh
+python scripts/dqn_train.py           # self-play -> train -> sync target, looped
+python scripts/dqn_export.py          # best checkpoint -> ../src/engine/dqnWeights.json
+python scripts/dqn_evaluate.py        # check the bot against perfect minimax
+python scripts/dqn_parity_check.py && node scripts/dqn_parity_check.mjs   # JS == Python
+```
 
-After retraining, re-run `export_weights.py` and commit the updated
-`weights.json`.
+Both training scripts accept `--iterations` and `--games-per-iter` for quick
+smoke tests. After retraining, re-run the matching export script and commit the
+updated weights JSON.
 
 ## How it works
 
+**Shared infrastructure:**
+
 | Module | Role |
 | --- | --- |
-| `alphazero/game_interface.py` | the game-agnostic contract the core depends on |
-| `alphazero/network.py` | policy/value MLP (game-agnostic, sized from config) |
-| `alphazero/mcts.py` | PUCT search guided by the network |
-| `alphazero/selfplay.py` | generates self-play games (the only training data) |
-| `alphazero/train.py` | one training step (policy + value loss) |
-| `alphazero/arena.py` | head-to-head gate — a new net is kept only if better |
+| `game_interface.py` | the game-agnostic `Game` contract both pipelines depend on |
 | `games/tictactoe.py` | tic-tac-toe as the first `Game` plugin |
 | `games/minimax_ref.py` | perfect minimax — used **only** to evaluate, never to train |
-| `config.py` | every hyperparameter, in one place |
 
-The AlphaZero core (`alphazero/`) talks only to the `Game` interface, so a new
-game is added by writing one plugin under `games/` — nothing else changes.
+A new game is added by writing one plugin under `games/` — neither algorithm's
+core changes. State is always canonicalized to the moving player's perspective
+(`+1` = my mark, `-1` = opponent's, `0` = empty), so one network plays both sides.
 
-State is always canonicalized to the moving player's perspective (`+1` = my
-mark, `-1` = opponent's, `0` = empty), so one network plays both sides.
+**`alphazero/`** — `network.py` (policy/value MLP), `mcts.py` (PUCT search),
+`selfplay.py`, `train.py`, `arena.py` (promotion gate). Config: `config.py`.
+
+**`dqn/`** — `qnetwork.py` (Q-value MLP), `replay_buffer.py`, `selfplay.py`
+(ε-greedy), `train.py` (temporal-difference loss with a target network). Config:
+`dqn/config.py`. The DQN bot learns `Q(state, action)` and plays `argmax` Q over
+legal moves — no tree, no lookahead.
 
 ## Results
 
-With the settings in `config.py`, the exported bot is **unbeatable**:
+All three bots were checked against perfect minimax on every one of the 4520
+reachable decision positions. A *losing blunder* is a move that turns a
+non-losing position into a losing one; **0 means the bot can never be beaten.**
 
-```
-head-to-head vs perfect minimax:  draw (net first), draw (net second)
-exhaustive optimality check:      4520 positions, 0 losing blunders
-```
+| Bot | Method | Search at play time | Result |
+| --- | --- | --- | --- |
+| minimax | full game-tree search | yes (exhaustive) | perfect |
+| AlphaZero | policy/value net + MCTS | yes (800-sim MCTS) | 0 losing blunders |
+| DQN | Q-network | **none** (one forward pass) | 0 losing blunders |
 
-Every reachable position was checked; the bot never makes a move that turns a
-non-losing position into a losing one. tic-tac-toe is a forced draw under
-perfect play, so a flawless bot draws — which is exactly what it does.
+Both neural bots are **unbeatable**. The DQN result is the notable one: with no
+search at all, the network alone plays flawlessly. tic-tac-toe is a forced draw
+under perfect play, so both bots draw minimax as first and second player.
 
 ## Parity with the browser
 
-The browser runs its own JavaScript port of the forward pass and MCTS
-(`../src/engine/nn.js`, `mcts.js`). `parity_check.py` + `parity_check.mjs`
-confirm the two implementations agree: the network is run in float64 on both
-sides, so forward outputs match to ~1e-15 and the chosen moves are identical.
+Each bot has a JavaScript engine (`../src/engine/`) that re-implements the
+forward pass — and, for AlphaZero, the MCTS. The `*_parity_check.py` /
+`*_parity_check.mjs` pairs confirm the JS and Python implementations agree: the
+networks are run in float64 on both sides, so outputs match to ~1e-15 and the
+chosen moves are identical.

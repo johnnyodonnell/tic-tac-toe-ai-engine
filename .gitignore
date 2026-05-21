@@ -6,6 +6,7 @@ dist/
 # Python training environment
 training/.venv/
 training/checkpoints/
-training/parity_expected.json
+training/dqn/checkpoints/
+training/*parity_expected.json
 __pycache__/
 *.pyc

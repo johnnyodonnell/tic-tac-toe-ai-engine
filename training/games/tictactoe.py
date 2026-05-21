@@ -1,4 +1,4 @@
-"""Tic-tac-toe as a Game plugin for the AlphaZero core.
+"""Tic-tac-toe as a Game plugin, shared by the AlphaZero and DQN pipelines.
 
 State: a 9-tuple of ints, row-major (index 0..8), from the moving player's
 perspective: +1 = my mark, -1 = opponent's mark, 0 = empty. After every move
@@ -8,7 +8,7 @@ the mover's frame.
 The rules mirror src/engine/game.js exactly; WIN_LINES is the same constant.
 """
 
-from alphazero.game_interface import Game
+from game_interface import Game
 
 # The 8 winning triples — identical to WIN_LINES in src/engine/game.js.
 WIN_LINES = (
