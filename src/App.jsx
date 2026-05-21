@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Board from './components/Board.jsx'
 import Status from './components/Status.jsx'
-import { bestMove } from './engine/minimax.js'
+import { bestMove } from './engine/neural.js'
 import {
   BOT,
   HUMAN,

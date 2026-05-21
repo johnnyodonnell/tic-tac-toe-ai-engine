@@ -1,0 +1,7 @@
+# Install with:  pip install -r requirements.txt
+# The CPU torch wheel is used deliberately — tic-tac-toe trains on CPU in
+# minutes, and the default PyPI wheel would pull gigabytes of CUDA.
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+torch>=2.2
+numpy>=1.26
